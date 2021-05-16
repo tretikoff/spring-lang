@@ -10,17 +10,24 @@ namespace JetBrains.ReSharper.Plugins.Spring
 {
     public class SpringParser : IParser
     {
-        private readonly ILexer _myLexer;
+        private ILexer _myLexer;
 
         public SpringParser(ILexer lexer)
         {
             _myLexer = lexer;
         }
 
+        public IFile ReParse(ILexer lexer)
+        {
+            _myLexer = lexer;
+            // TODO somehow use TreeBuilder.ReScan
+            return ParseFile();
+        }
+
         public IFile ParseFile()
         {
-            using var def = Lifetime.Define();
-            var builder = new PsiBuilder(_myLexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime);
+            var def = Lifetime.Define();
+            var builder = new TreeBuilder(_myLexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime);
             var fileMark = builder.Mark();
             ParseCompoundStatement(builder);
 
@@ -29,7 +36,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             return file;
         }
 
-        private static bool ExpectToken(PsiBuilder builder, SpringTokenType tokenType, int mark = -1)
+        private static bool ExpectToken(TreeBuilder builder, SpringTokenType tokenType, int mark = -1)
         {
             var tt = GetTokenType(builder);
             if (tt == tokenType) return true;
@@ -46,7 +53,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             return false;
         }
 
-        private static TokenNodeType GetTokenType(PsiBuilder builder)
+        private static TokenNodeType GetTokenType(TreeBuilder builder)
         {
             var tt = builder.GetTokenType();
             if (tt == null)
@@ -60,7 +67,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             return tt;
         }
 
-        private void ParseCompoundStatement(PsiBuilder builder)
+        private void ParseCompoundStatement(TreeBuilder builder)
         {
             ExpectToken(builder, SpringTokenType.Begin);
             var start = builder.Mark();
@@ -75,7 +82,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.TryAdvance();
         }
 
-        private void ParseStatementList(PsiBuilder builder)
+        private void ParseStatementList(TreeBuilder builder)
         {
             var tt = GetTokenType(builder);
             ParseStatement(builder);
@@ -92,7 +99,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             }
         }
 
-        private void ParseStatement(PsiBuilder builder)
+        private void ParseStatement(TreeBuilder builder)
         {
             var tt = GetTokenType(builder);
             if (tt == SpringTokenType.Begin)
@@ -116,7 +123,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.TryAdvance();
         }
 
-        private void ParseProcedureCall(PsiBuilder builder)
+        private void ParseProcedureCall(TreeBuilder builder)
         {
             var start = builder.Mark();
             builder.TryAdvance();
@@ -131,7 +138,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.TryAdvance();
         }
 
-        private void ParseAssignStatement(PsiBuilder builder)
+        private void ParseAssignStatement(TreeBuilder builder)
         {
             var start = builder.Mark();
             var identToken = builder.TryGetToken();
@@ -144,7 +151,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.Done(start, SpringCompositeNodeType.Statement, statement);
         }
 
-        private void ParseExpr(PsiBuilder builder)
+        private void ParseExpr(TreeBuilder builder)
         {
             var start = builder.Mark();
             ParseTerm(builder);
@@ -164,7 +171,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.Done(start, SpringCompositeNodeType.Expression, left);
         }
 
-        private void ParseTerm(PsiBuilder builder)
+        private void ParseTerm(TreeBuilder builder)
         {
             var start = builder.Mark();
             var tt = GetTokenType(builder);
@@ -190,7 +197,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.Done(start, SpringCompositeNodeType.Expression, left);
         }
 
-        private void ParseFactor(PsiBuilder builder)
+        private void ParseFactor(TreeBuilder builder)
         {
             var tt = GetTokenType(builder);
 
@@ -211,7 +218,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             }
         }
 
-        private void ParseLiteral(PsiBuilder builder)
+        private void ParseLiteral(TreeBuilder builder)
         {
             var tt = builder.GetTokenType();
             if (tt == SpringTokenType.Number || tt == SpringTokenType.Identifier)
@@ -224,7 +231,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             }
         }
 
-        private void ParseUnaryExpr(PsiBuilder builder)
+        private void ParseUnaryExpr(TreeBuilder builder)
         {
             var start = builder.Mark();
             var tt = GetTokenType(builder);
@@ -244,7 +251,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             builder.Done(start, SpringCompositeNodeType.UnaryOp, new UnaryOpNode(builder.TryGetToken()));
         }
 
-        private void ParseBracketExpr(PsiBuilder builder)
+        private void ParseBracketExpr(TreeBuilder builder)
         {
             builder.TryAdvance();
             ParseExpr(builder);
@@ -264,7 +271,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
 
     public static class TokenNodeTypeExtensions
     {
-        public static bool TryAdvance(this PsiBuilder builder)
+        public static bool TryAdvance(this TreeBuilder builder)
         {
             if (builder.Eof())
             {
@@ -281,7 +288,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             return true;
         }
 
-        public static Token TryGetToken(this PsiBuilder builder)
+        public static Token TryGetToken(this TreeBuilder builder)
         {
             return builder.Eof() ? new Token() : builder.GetToken();
         }

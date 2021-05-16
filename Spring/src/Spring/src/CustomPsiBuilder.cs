@@ -10,6 +10,7 @@ using JetBrains.ReSharper.Psi.ExtensionsAPI.Tree;
 using JetBrains.ReSharper.Psi.Parsing;
 using JetBrains.ReSharper.Psi.TreeBuilder;
 using JetBrains.Text;
+using JetBrains.Util;
 using JetBrains.Util.Logging;
 
 namespace JetBrains.ReSharper.Plugins.Spring
@@ -181,6 +182,14 @@ namespace JetBrains.ReSharper.Plugins.Spring
             curToken = Math.Min(lastIdx, _myLexemeCount);
         }
 
+        public void ReScan(
+            TextRange oldRange,
+            ILexerFactory lexerFactory,
+            BufferRange newBufferRange)
+        {
+            MyTokenBuffer.ReScan(oldRange, lexerFactory, newBufferRange);
+        }
+
         private LeafElementBase CreateToken(
             TokenNodeType tokenNodeType,
             IBuffer buffer,
@@ -320,6 +329,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             CheckInvariant();
             return currentTokenType;
         }
+
         public TokenNodeType GetTokenType() => _myCurrentTokenType;
 
 
@@ -330,7 +340,8 @@ namespace JetBrains.ReSharper.Plugins.Spring
         {
             if (!@do)
                 return;
-            Assertion.Assert(_myNonCommentLexeme <= _myCurrentLexeme, "non comment lexeme must be before current lexeme");
+            Assertion.Assert(_myNonCommentLexeme <= _myCurrentLexeme,
+                "non comment lexeme must be before current lexeme");
             var num = 0;
             if (MyProduction.Count != 0)
                 num = MyProduction[MyProduction.Count - 1].LexemeIndex;
@@ -343,6 +354,5 @@ namespace JetBrains.ReSharper.Plugins.Spring
         private void DoValidityChecks(int first, int last)
         {
         }
-        
     }
 }

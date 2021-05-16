@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using FluentAssertions;
 using JetBrains.Text;
-using JetBrains.Util;
 using NUnit.Framework;
 
 namespace JetBrains.ReSharper.Plugins.Spring.test
@@ -21,7 +20,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         [TestCase("ServerHelper.pas")]
         [TestCase("ServerLoop.pas")]
         [Test]
-        public void TestParse(string filename)
+        public void TestParseSpeed(string filename)
         {
             var content = File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
             var parser = new SpringParser(new SpringLexer(new StringBuffer(content)));
@@ -58,6 +57,8 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
                 lexer.TokenStart.Should().Be(lastTokenEnd, $"mismatched on {lexer.CurrentPosition} position");
                 lastTokenEnd = lexer.TokenEnd;
             }
+
+            lastTokenEnd.Should().Be(content.Length);
         }
     }
 }

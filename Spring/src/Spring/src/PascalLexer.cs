@@ -128,7 +128,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
                     Move();
                     return;
                 case '{':
-                    var comSb = new StringBuilder("{");
+                    var comSb = new StringBuilder();
                     while (_curChar != char.MinValue)
                     {
                         comSb.Append(_curChar);
@@ -267,7 +267,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             set => _currentPosition = (int) value;
         }
 
-        private int _currentPosition;
+        protected int _currentPosition;
 
         public TokenNodeType TokenType => CurToken.GetTokenType();
         public int TokenStart { get; private set; }
