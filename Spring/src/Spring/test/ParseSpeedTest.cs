@@ -1,8 +1,10 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using JetBrains.ReSharper.Psi.Parsing;
 using JetBrains.Text;
+using JetBrains.Util.Collections;
 using NUnit.Framework;
 
 namespace JetBrains.ReSharper.Plugins.Spring.test
@@ -18,6 +20,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
     [TestFixture]
     public class ParseSpeedTest
     {
+        private readonly Random _random = new();
         private ILexerFactory GetLexerFactory(bool incremental = false)
         {
             if (incremental)
@@ -28,7 +31,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
             return new SpringLanguageService.SpringLexerFactory();
         }
 
-        private string[] filenames = new[]
+        private readonly string[] _filenames =
         {
             "BanSystem.pas",
             "FileServer.pas",
@@ -42,33 +45,72 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         };
 
         [Test]
+        public void TestReparseSpeed()
+        {
+            var parsers = new HashMap<string, IIncrementalParser>();
+            var createParser =
+                new Func<string, IIncrementalParser>(s => new SpringParser(new SpringLexer(new StringBuffer(s))));
+            PrintParseSpeed(s =>
+            {
+                parsers[s] = createParser(s);
+                return parsers[s];
+            }, "Parser");
+            // PrintParseSpeed((s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s)))), "Parser with incremental lexer");
+        }
+
+        [Test]
         public void TestParseSpeed()
         {
-            foreach (var filename in filenames)
-            {
-                var content =
-                    File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
-                var parser = new SpringParser(new SpringLexer(new StringBuffer(content)));
-                var incrementalParser = new SpringParser(new SpringIncrementalLexer(new StringBuffer(content)));
-                Console.WriteLine($"file {filename}, usual parser - {fetchParseTime(parser)}");
-                Console.WriteLine($"file {filename}, uncremental parser - {fetchParseTime(incrementalParser)}");
-                Console.WriteLine();
-            }
+            PrintParseSpeed((s => new SpringParser(new SpringLexer(new StringBuffer(s)))), "Parser");
+            // PrintParseSpeed((s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s)))), "Parser with incremental lexer");
+        }
+
+        [Test]
+        public void TestReparseNoChange()
+        {
+            // PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Parser", x => x);
+            PrintParseSpeed(s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s))), "IncrementalParser", x => x);
         }
 
         [Test]
         public void TestParseSpeedChangeOneChar()
         {
-            foreach (var filename in filenames)
+            PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Parser", oldLex =>
+            {
+                var str = oldLex.Buffer.GetText().ToCharArray();
+                str[_random.Next(str.Length)] = getRandomChar();
+                return new SpringLexer(new StringBuffer(str.ToString()));
+            });
+        }
+
+        private void PrintParseSpeed(Func<string, IIncrementalParser> createParser, string parserType,
+            Func<ILexer, ILexer> changeText = null)
+        {
+            var benchmark = new HashMap<string, TimeSpan>();
+            var reparseBenchmark = changeText == null ? null : new HashMap<string, TimeSpan>();
+            foreach (var filename in _filenames)
             {
                 var content =
                     File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
-                var parser = new SpringParser(new SpringLexer(new StringBuffer(content)));
-                var incrementalParser = new SpringParser(new SpringIncrementalLexer(new StringBuffer(content)));
-                Console.WriteLine($"file {filename}, usual parser - {fetchParseTime(parser)}");
-                Console.WriteLine($"file {filename}, uncremental parser - {fetchParseTime(incrementalParser)}");
-                Console.WriteLine();
+                var parser = createParser(content);
+                benchmark[filename] = fetchTime(() => parser.ParseFile());
+                Console.WriteLine($"{parserType}: file {filename}, - {benchmark[filename]}");
+                if (changeText != null)
+                {
+                    reparseBenchmark[filename] = fetchTime(() => parser.ReParse(changeText(parser.GetLexer())));
+                    Console.WriteLine($"{parserType} reparse: file {filename}, - {reparseBenchmark[filename]}");
+                }
             }
+
+            var fullTime = benchmark.Aggregate(new TimeSpan(), (acc, x) => acc.Add(x.Value));
+            Console.WriteLine($"{parserType}: Project parse time is {fullTime}");
+            if (changeText != null)
+            {
+                var reparseTime = reparseBenchmark.Aggregate(new TimeSpan(), (acc, x) => acc.Add(x.Value));
+                Console.WriteLine($"{parserType} reparse: Project reparse time is {reparseTime}");
+            }
+
+            Console.WriteLine();
         }
 
         [Test]
@@ -97,21 +139,20 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         }
 
 
-        private TimeSpan fetchParseTime(IParser parser)
+        private TimeSpan fetchTime(Action x)
         {
             var sw = new Stopwatch();
             sw.Start();
-            var tree = parser.ParseFile();
+            x();
             sw.Stop();
             return sw.Elapsed;
         }
 
-        private char insertRandomChar()
+        private char getRandomChar()
         {
             var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789;()_:";
-            var random = new Random();
 
-            return chars[random.Next(chars.Length)];
+            return chars[_random.Next(chars.Length)];
         }
 
         private String changeRandomLexeme()

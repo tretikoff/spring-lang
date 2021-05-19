@@ -20,7 +20,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         [TestCase("ServerHelper.pas")]
         [TestCase("ServerLoop.pas")]
         [Test]
-        public void TestParseSpeed(string filename)
+        public void TestParse(string filename)
         {
             var content = File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
             var parser = new SpringParser(new SpringLexer(new StringBuffer(content)));

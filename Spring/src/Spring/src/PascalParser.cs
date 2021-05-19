@@ -8,9 +8,16 @@ using JetBrains.Text;
 
 namespace JetBrains.ReSharper.Plugins.Spring
 {
-    public class SpringParser : IParser
+    internal interface IIncrementalParser : IParser
+    {
+        public IFile ReParse(ILexer lexer);
+        public ILexer GetLexer();
+    }
+
+    public class SpringParser : IIncrementalParser
     {
         private ILexer _myLexer;
+        private TokenBuffer _buffer;
 
         public SpringParser(ILexer lexer)
         {
@@ -20,19 +27,25 @@ namespace JetBrains.ReSharper.Plugins.Spring
         public IFile ReParse(ILexer lexer)
         {
             _myLexer = lexer;
-            // TODO somehow use TreeBuilder.ReScan
             return ParseFile();
+        }
+
+        public ILexer GetLexer()
+        {
+            return _myLexer;
         }
 
         public IFile ParseFile()
         {
             var def = Lifetime.Define();
-            var builder = new TreeBuilder(_myLexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime);
+            var builder = new TreeBuilder(_myLexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime,
+                _buffer);
             var fileMark = builder.Mark();
             ParseCompoundStatement(builder);
 
             builder.Done(fileMark, SpringFileNodeType.Instance, null);
             var file = (IFile) builder.BuildTree();
+            _buffer = builder.MyTokenBuffer;
             return file;
         }
 
@@ -61,7 +74,8 @@ namespace JetBrains.ReSharper.Plugins.Spring
                 return null;
             }
 
-            if (!(builder.GetTokenType() == SpringTokenType.Whitespace || builder.GetTokenType() == SpringTokenType.Comment)) return tt;
+            if (!(builder.GetTokenType() == SpringTokenType.Whitespace ||
+                  builder.GetTokenType() == SpringTokenType.Comment)) return tt;
             builder.TryAdvance();
             tt = builder.GetTokenType();
             return tt;
@@ -95,6 +109,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
                 {
                     break;
                 }
+
                 ParseStatement(builder);
             }
         }
@@ -279,12 +294,14 @@ namespace JetBrains.ReSharper.Plugins.Spring
             }
 
             builder.AdvanceLexer();
-            while (builder.GetTokenType() == SpringTokenType.Whitespace || builder.GetTokenType() == SpringTokenType.Comment)
+            while (builder.GetTokenType() == SpringTokenType.Whitespace ||
+                   builder.GetTokenType() == SpringTokenType.Comment)
             {
                 builder.AdvanceLexer();
                 if (builder.Eof())
                     return false;
             }
+
             return true;
         }
 
