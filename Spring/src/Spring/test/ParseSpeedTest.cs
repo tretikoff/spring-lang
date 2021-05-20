@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
+using JetBrains.Annotations;
 using JetBrains.ReSharper.Psi.Parsing;
 using JetBrains.Text;
 using JetBrains.Util.Collections;
@@ -36,15 +37,33 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         private readonly string[] _filenames =
         {
             "BanSystem.pas",
-            // "FileServer.pas",
-            // "LobbyClient.pas",
-            // "Main.pas",
-            // "Rcon.pas",
-            // "Server.pas",
-            // "ServerCommands.pas",
-            // "ServerHelper.pas",
-            // "ServerLoop.pas",
+            "FileServer.pas",
+            "LobbyClient.pas",
+            "Main.pas",
+            "Rcon.pas",
+            "Server.pas",
+            "ServerCommands.pas",
+            "ServerHelper.pas",
+            "ServerLoop.pas",
         };
+
+        [Test]
+        public void FilesBench()
+        {
+            var chars = 0;
+            var lexemes = 0;
+            var strings = 0;
+            foreach (var filename in _filenames)
+            {
+                var content =
+                    File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
+                chars += content.Length;
+                strings += File.ReadLines(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename))
+                    .Count();
+                lexemes += new TokenBuffer(new SpringLexer(new StringBuffer(content))).CachedTokens.Count;
+            }
+            Console.WriteLine($" {chars} {lexemes} {strings}");
+        }
 
         [Test]
         public void TestReparseSpeed()
@@ -82,7 +101,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
                 oldLex =>
                 {
                     var chars = oldLex.Buffer.GetText().ToCharArray();
-                    chars[_random.Next(chars.Length)] = getRandomChar();
+                    chars[_random.Next(chars.Length)] = GetRandomChar();
                     // return CreateIncrementalLexer(new string(chars));
                     return CreateLexer(new string(chars));
                 });
@@ -92,7 +111,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         {
             return new SpringLexer(new StringBuffer(str));
         }
-        
+
         private SpringLexer CreateIncrementalLexer(string str)
         {
             return new SpringIncrementalLexer(new StringBuffer(str));
@@ -110,7 +129,8 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
                 var tokenToReplace = buffer.CachedTokens[_random.Next(tokenLength)];
                 var tokenWhichReplaces = buffer.CachedTokens[_random.Next(tokenLength)];
                 var sb = new StringBuilder(oldStr.Substring(0, tokenToReplace.Start));
-                sb.Append(oldStr.Substring(tokenWhichReplaces.Start, tokenWhichReplaces.End - tokenWhichReplaces.Start));
+                sb.Append(oldStr.Substring(tokenWhichReplaces.Start,
+                    tokenWhichReplaces.End - tokenWhichReplaces.Start));
                 sb.Append(oldStr.Substring(tokenToReplace.End));
                 return CreateLexer(sb.ToString());
                 // return CreateIncrementalLexer(sb.ToString());
@@ -128,11 +148,11 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
                     File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
                 var parser = createParser(content);
                 benchmark[filename] = fetchTime(() => parser.ParseFile());
-                Console.WriteLine($"{parserType}: file {filename}, - {benchmark[filename]}");
+                Console.WriteLine($"{parserType}: file {filename}, - {benchmark[filename].ToFormatString()}");
                 if (changeText != null)
                 {
                     reparseBenchmark[filename] = fetchTime(() => parser.ReParse(changeText(parser.GetLexer())));
-                    Console.WriteLine($"{parserType} reparse: file {filename}, - {reparseBenchmark[filename]}");
+                    Console.WriteLine($"{parserType} reparse: file {filename}, - {reparseBenchmark[filename].ToFormatString()}");
                 }
             }
 
@@ -182,16 +202,30 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
             return sw.Elapsed;
         }
 
-        private char getRandomChar()
+        private char GetRandomChar()
         {
             var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789;()_:";
 
             return chars[_random.Next(chars.Length)];
         }
+    }
 
-        private String changeRandomLexeme()
+    internal static class TimeSpanExtensions
+    {
+        public static string ToFormatString(this TimeSpan timeSpan)
         {
-            return null;
+            var sb = new StringBuilder();
+            if (timeSpan.Seconds != 0)
+            {
+                sb.Append($"{timeSpan.Seconds} с ");
+            }
+            if (timeSpan.Milliseconds != 0)
+            {
+                
+                sb.Append($"{timeSpan.Milliseconds} мс");
+            }
+
+            return sb.ToString();
         }
     }
 }

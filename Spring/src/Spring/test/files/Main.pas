@@ -1,3 +1,36 @@
+{*******************************************************}
+{                                                       }
+{       Main Unit for SOLDAT                            }
+{                                                       }
+{       Copyright (c) 2012 Michal Marcinkowski          }
+{                                                       }
+{*******************************************************}
+
+unit Main;
+
+interface
+
+uses
+  {$IFDEF MSWINDOWS}
+  Windows,
+  {$ELSE}
+  Baseunix,
+  {$ENDIF}
+
+  {$IFDEF SCRIPT}ScriptDispatcher,{$ENDIF}
+
+  Server, Constants, SysUtils, Classes, ServerHelper, ServerLoop;
+
+procedure RunServer;
+
+implementation
+
+var
+  CtrlCHit: Boolean = False;
+
+{$IFDEF MSWINDOWS}
+// The windows server needs a hook to make soldatserver exit normally
+function ConsoleHandlerRoutine(CtrlType: DWORD): BOOL; stdcall;
 begin
   Result := False;
   if CtrlType = CTRL_C_EVENT then

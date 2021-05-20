@@ -1,3 +1,30 @@
+unit LobbyClient;
+
+interface
+
+uses
+  SysUtils, Classes, fpjson, fphttpclient, Constants;
+
+type
+
+  TLobbyThread = Class(TThread)
+    private
+      FData: TStringStream;
+      FURL: String;
+      Client: TFPHTTPClient;
+    protected
+      procedure Execute; override;
+    public
+      constructor Create();
+      destructor Destroy; override;
+  end;
+
+implementation
+  uses Server, Game, Sprites, Version, Weapons, Net, TraceLog;
+
+constructor TLobbyThread.Create();
+
+function GetOS(): Integer;
 begin
   Result :=
   {$IFDEF MSWINDOWS}
