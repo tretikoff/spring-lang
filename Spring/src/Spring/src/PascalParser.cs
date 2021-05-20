@@ -41,7 +41,11 @@ namespace JetBrains.ReSharper.Plugins.Spring
             var builder = new TreeBuilder(_myLexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime,
                 _buffer);
             var fileMark = builder.Mark();
-            ParseCompoundStatement(builder);
+            while (!builder.Eof())
+            {
+                var tt = builder.GetTokenType();
+                ParseCompoundStatement(builder);
+            }
 
             builder.Done(fileMark, SpringFileNodeType.Instance, null);
             var file = (IFile) builder.BuildTree();
@@ -229,7 +233,8 @@ namespace JetBrains.ReSharper.Plugins.Spring
                 ParseLiteral(builder);
             else
             {
-                builder.Error("Expected factor");
+                builder.TryAdvance();
+                // builder.Error("Expected factor");
             }
         }
 
@@ -255,6 +260,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             if (tt == SpringTokenType.Plus
                 || tt == SpringTokenType.Minus)
             {
+                builder.TryAdvance();
                 ParseUnaryExpr(builder);
             }
             else

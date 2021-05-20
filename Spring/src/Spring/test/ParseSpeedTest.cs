@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using JetBrains.ReSharper.Psi.Parsing;
 using JetBrains.Text;
 using JetBrains.Util.Collections;
@@ -21,6 +22,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
     public class ParseSpeedTest
     {
         private readonly Random _random = new();
+
         private ILexerFactory GetLexerFactory(bool incremental = false)
         {
             if (incremental)
@@ -34,14 +36,14 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         private readonly string[] _filenames =
         {
             "BanSystem.pas",
-            "FileServer.pas",
-            "LobbyClient.pas",
-            "Main.pas",
-            "Rcon.pas",
-            "Server.pas",
-            "ServerCommands.pas",
-            "ServerHelper.pas",
-            "ServerLoop.pas",
+            // "FileServer.pas",
+            // "LobbyClient.pas",
+            // "Main.pas",
+            // "Rcon.pas",
+            // "Server.pas",
+            // "ServerCommands.pas",
+            // "ServerHelper.pas",
+            // "ServerLoop.pas",
         };
 
         [Test]
@@ -69,17 +71,49 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         public void TestReparseNoChange()
         {
             // PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Parser", x => x);
-            PrintParseSpeed(s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s))), "IncrementalParser", x => x);
+            PrintParseSpeed(s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s))), "IncrementalParser",
+                x => x);
         }
 
         [Test]
-        public void TestParseSpeedChangeOneChar()
+        public void TestParseSpeedChangeRandomChar()
         {
-            PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Parser", oldLex =>
+            PrintParseSpeed(s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s))), "Incremental",
+                oldLex =>
+                {
+                    var chars = oldLex.Buffer.GetText().ToCharArray();
+                    chars[_random.Next(chars.Length)] = getRandomChar();
+                    // return CreateIncrementalLexer(new string(chars));
+                    return CreateLexer(new string(chars));
+                });
+        }
+
+        private SpringLexer CreateLexer(string str)
+        {
+            return new SpringLexer(new StringBuffer(str));
+        }
+        
+        private SpringLexer CreateIncrementalLexer(string str)
+        {
+            return new SpringIncrementalLexer(new StringBuffer(str));
+        }
+
+        [Test]
+        public void TestParseSpeedChangeRandomLexeme()
+        {
+            PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Incremental", oldLex =>
             {
-                var str = oldLex.Buffer.GetText().ToCharArray();
-                str[_random.Next(str.Length)] = getRandomChar();
-                return new SpringLexer(new StringBuffer(str.ToString()));
+                var chars = oldLex.Buffer.GetText().ToCharArray();
+                var oldStr = new string(chars);
+                var buffer = new TokenBuffer(oldLex);
+                var tokenLength = buffer.CachedTokens.Count;
+                var tokenToReplace = buffer.CachedTokens[_random.Next(tokenLength)];
+                var tokenWhichReplaces = buffer.CachedTokens[_random.Next(tokenLength)];
+                var sb = new StringBuilder(oldStr.Substring(0, tokenToReplace.Start));
+                sb.Append(oldStr.Substring(tokenWhichReplaces.Start, tokenWhichReplaces.End - tokenWhichReplaces.Start));
+                sb.Append(oldStr.Substring(tokenToReplace.End));
+                return CreateLexer(sb.ToString());
+                // return CreateIncrementalLexer(sb.ToString());
             });
         }
 
