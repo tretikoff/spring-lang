@@ -1,59 +1,24 @@
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using JetBrains.Annotations;
 using JetBrains.ReSharper.Psi.Parsing;
 using JetBrains.Text;
+using JetBrains.Util;
 using JetBrains.Util.Collections;
 using NUnit.Framework;
 
 namespace JetBrains.ReSharper.Plugins.Spring.test
 {
-    public class SpringIncrementalLexerFactory : ILexerFactory
+    public class ParseSpeedTest : ParseSpeedTestBase
     {
-        public ILexer CreateLexer(IBuffer buffer)
-        {
-            return new SpringIncrementalLexer(buffer);
-        }
-    }
-
-    [TestFixture]
-    public class ParseSpeedTest
-    {
-        private readonly Random _random = new();
-
-        private ILexerFactory GetLexerFactory(bool incremental = false)
-        {
-            if (incremental)
-            {
-                return new SpringIncrementalLexerFactory();
-            }
-
-            return new SpringLanguageService.SpringLexerFactory();
-        }
-
-        private readonly string[] _filenames =
-        {
-            "BanSystem.pas",
-            "FileServer.pas",
-            "LobbyClient.pas",
-            "Main.pas",
-            "Rcon.pas",
-            "Server.pas",
-            "ServerCommands.pas",
-            "ServerHelper.pas",
-            "ServerLoop.pas",
-        };
-
         [Test]
         public void FilesBench()
         {
             var chars = 0;
             var lexemes = 0;
             var strings = 0;
-            foreach (var filename in _filenames)
+            foreach (var filename in Filenames)
             {
                 var content =
                     File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
@@ -62,6 +27,7 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
                     .Count();
                 lexemes += new TokenBuffer(new SpringLexer(new StringBuffer(content))).CachedTokens.Count;
             }
+
             Console.WriteLine($" {chars} {lexemes} {strings}");
         }
 
@@ -69,163 +35,185 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
         public void TestReparseSpeed()
         {
             var parsers = new HashMap<string, IIncrementalParser>();
-            var createParser =
-                new Func<string, IIncrementalParser>(s => new SpringParser(new SpringLexer(new StringBuffer(s))));
-            PrintParseSpeed(s =>
-            {
-                parsers[s] = createParser(s);
-                return parsers[s];
-            }, "Parser");
+            PrintParseSpeed(ParserType.Regular);
             // PrintParseSpeed((s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s)))), "Parser with incremental lexer");
         }
 
         [Test]
         public void TestParseSpeed()
         {
-            PrintParseSpeed((s => new SpringParser(new SpringLexer(new StringBuffer(s)))), "Parser");
-            // PrintParseSpeed((s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s)))), "Parser with incremental lexer");
+            PrintParseSpeed(ParserType.Regular);
+            // PrintParseSpeed((s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s)))), ParserType.Incremental);
         }
 
         [Test]
         public void TestReparseNoChange()
         {
             // PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Parser", x => x);
-            PrintParseSpeed(s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s))), "IncrementalParser",
-                x => x);
+            // PrintParseSpeed(ParserType.Incremental,
+            //     x => x);
         }
 
-        [Test]
-        public void TestParseSpeedChangeRandomChar()
-        {
-            PrintParseSpeed(s => new SpringParser(new SpringIncrementalLexer(new StringBuffer(s))), "Incremental",
-                oldLex =>
-                {
-                    var chars = oldLex.Buffer.GetText().ToCharArray();
-                    chars[_random.Next(chars.Length)] = GetRandomChar();
-                    // return CreateIncrementalLexer(new string(chars));
-                    return CreateLexer(new string(chars));
-                });
-        }
+        // [Test]
+        // public void TestParseSpeedChangeRandomChar()
+        // {
+        //     PrintParseSpeed(ParserType.Incremental,
+        //         // PrintParseSpeed( ParserType.Regular,
+        //         oldLex =>
+        //         {
+        //             var chars = oldLex.Buffer.GetText().ToCharArray();
+        //             chars[Random.Next(chars.Length)] = GetRandomChar();
+        //             return CreateIncrementalLexer(new string(chars));
+        //         });
+        // }
 
         private SpringLexer CreateLexer(string str)
         {
             return new SpringLexer(new StringBuffer(str));
         }
 
-        private SpringLexer CreateIncrementalLexer(string str)
-        {
-            return new SpringIncrementalLexer(new StringBuffer(str));
-        }
+        // [Test]
+        // public void TestParseSpeedChangeRandomLexeme()
+        // {
+        //     PrintParseSpeed(ParserType.Incremental, parser =>
+        //     {
+        //         var chars = oldLex.Buffer.GetText().ToCharArray();
+        //         var oldStr = new string(chars);
+        //         var buffer = new TokenBuffer(oldLex);
+        //         var tokenLength = buffer.CachedTokens.Count;
+        //         var tokenToReplace = buffer.CachedTokens[Random.Next(tokenLength)];
+        //         var tokenWhichReplaces = buffer.CachedTokens[Random.Next(tokenLength)];
+        //         var sb = new StringBuilder(oldStr.Substring(0, tokenToReplace.Start));
+        //         sb.Append(oldStr.Substring(tokenWhichReplaces.Start,
+        //             tokenWhichReplaces.End - tokenWhichReplaces.Start));
+        //         sb.Append(oldStr.Substring(tokenToReplace.End));
+        //         return CreateLexer(sb.ToString());
+        //         // return CreateIncrementalLexer(sb.ToString());
+        //     });
+        // }
 
         [Test]
-        public void TestParseSpeedChangeRandomLexeme()
+        [TestCase(ParserType.Incremental)]
+        [TestCase(ParserType.Regular)]
+        public void TestRelexSpeedChangeFirstBegin(ParserType type)
         {
-            PrintParseSpeed(s => new SpringParser(new SpringLexer(new StringBuffer(s))), "Incremental", oldLex =>
+            PrintLexerSpeed(type, parser =>
             {
-                var chars = oldLex.Buffer.GetText().ToCharArray();
-                var oldStr = new string(chars);
-                var buffer = new TokenBuffer(oldLex);
-                var tokenLength = buffer.CachedTokens.Count;
-                var tokenToReplace = buffer.CachedTokens[_random.Next(tokenLength)];
-                var tokenWhichReplaces = buffer.CachedTokens[_random.Next(tokenLength)];
-                var sb = new StringBuilder(oldStr.Substring(0, tokenToReplace.Start));
-                sb.Append(oldStr.Substring(tokenWhichReplaces.Start,
-                    tokenWhichReplaces.End - tokenWhichReplaces.Start));
-                sb.Append(oldStr.Substring(tokenToReplace.End));
-                return CreateLexer(sb.ToString());
-                // return CreateIncrementalLexer(sb.ToString());
+                var chars = parser.Lexer.Buffer.GetText().ToCharArray();
+                var buffer = new TokenBuffer(parser.Lexer);
+                var start = 0;
+                var end = 0;
+                for (var i = 0; i < buffer.CachedTokens.Count; i++)
+                {
+                    if (buffer[i].Type != SpringTokenType.Begin) continue;
+                    var j = start = buffer[i].Start;
+                    end = buffer[i].End;
+                    for (; j < end; j++)
+                    {
+                        chars[j] = 'X';
+                    }
+
+                    break;
+                }
+
+                var range = new TextRange(start, end);
+                parser.builder.ReScan(range,
+                    type == ParserType.Incremental ? new IncrementalLexerFactory() : new LexerFactory(),
+                    new BufferRange(parser.Lexer.Buffer, new TextRange(0, parser.Lexer.Buffer.Length)));
             });
         }
 
-        private void PrintParseSpeed(Func<string, IIncrementalParser> createParser, string parserType,
-            Func<ILexer, ILexer> changeText = null)
+        [Test]
+        [TestCase(ParserType.Incremental)]
+        [TestCase(ParserType.Regular)]
+        public void TestChangeFirstBegin(ParserType type)
         {
-            var benchmark = new HashMap<string, TimeSpan>();
-            var reparseBenchmark = changeText == null ? null : new HashMap<string, TimeSpan>();
-            foreach (var filename in _filenames)
+            PrintParseSpeed(type, parser =>
             {
-                var content =
-                    File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "../../../test/files", filename));
-                var parser = createParser(content);
-                benchmark[filename] = fetchTime(() => parser.ParseFile());
-                Console.WriteLine($"{parserType}: file {filename}, - {benchmark[filename].ToFormatString()}");
-                if (changeText != null)
+                var chars = parser.Lexer.Buffer.GetText().ToCharArray();
+                var buffer = new TokenBuffer(parser.Lexer);
+                var start = 0;
+                var end = 0;
+                for (var i = 0; i < buffer.CachedTokens.Count; i++)
                 {
-                    reparseBenchmark[filename] = fetchTime(() => parser.ReParse(changeText(parser.GetLexer())));
-                    Console.WriteLine($"{parserType} reparse: file {filename}, - {reparseBenchmark[filename].ToFormatString()}");
+                    if (buffer[i].Type != SpringTokenType.Begin) continue;
+                    var j = start = buffer[i].Start;
+                    end = buffer[i].End;
+                    for (; j < end; j++)
+                    {
+                        chars[j] = 'X';
+                    }
+
+                    break;
                 }
-            }
 
-            var fullTime = benchmark.Aggregate(new TimeSpan(), (acc, x) => acc.Add(x.Value));
-            Console.WriteLine($"{parserType}: Project parse time is {fullTime}");
-            if (changeText != null)
+                var range = new TextRange(start, end);
+                parser.builder.ReScan(range,
+                    type == ParserType.Incremental ? new IncrementalLexerFactory() : new LexerFactory(),
+                    new BufferRange(parser.Lexer.Buffer, new TextRange(0, parser.Lexer.Buffer.Length)));
+            });
+        }
+
+        [Test]
+        [TestCase(ParserType.Regular)]
+        [TestCase(ParserType.Incremental)]
+        public void TestChangeLastEnd(ParserType type)
+        {
+            PrintParseSpeed(type, parser =>
             {
-                var reparseTime = reparseBenchmark.Aggregate(new TimeSpan(), (acc, x) => acc.Add(x.Value));
-                Console.WriteLine($"{parserType} reparse: Project reparse time is {reparseTime}");
-            }
+                var chars = parser.Lexer.Buffer.GetText().ToCharArray();
+                var buffer = new TokenBuffer(parser.Lexer);
+                var start = 0;
+                var end = 0;
+                for (var i = buffer.CachedTokens.Count - 1; i >= 0; i--)
+                {
+                    if (buffer[i].Type != SpringTokenType.End) continue;
+                    var j = start = buffer[i].Start;
+                    end = buffer[i].End;
+                    for (; j < end; j++)
+                    {
+                        chars[j] = 'X';
+                    }
 
-            Console.WriteLine();
+                    break;
+                }
+
+                var range = new TextRange(start, end);
+                parser.builder.ReScan(range,
+                    type == ParserType.Incremental ? new IncrementalLexerFactory() : new LexerFactory(),
+                    new BufferRange(parser.Lexer.Buffer, new TextRange(0, parser.Lexer.Buffer.Length)));
+            });
         }
-
+        
         [Test]
-        public void TestParseSpeedChangeSeveralChars()
-        {
-        }
-
-        [Test]
-        public void TestParseSpeedChangeSeveralChar()
-        {
-        }
-
-        [Test]
-        public void TestParseSpeedChangeLexem()
-        {
-        }
-
-        [Test]
-        public void TestParseRemoveLexem()
-        {
-        }
-
-        [Test]
-        public void TestParseAddLexem()
-        {
-        }
-
-
-        private TimeSpan fetchTime(Action x)
-        {
-            var sw = new Stopwatch();
-            sw.Start();
-            x();
-            sw.Stop();
-            return sw.Elapsed;
-        }
-
-        private char GetRandomChar()
-        {
-            var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789;()_:";
-
-            return chars[_random.Next(chars.Length)];
-        }
-    }
-
-    internal static class TimeSpanExtensions
-    {
-        public static string ToFormatString(this TimeSpan timeSpan)
-        {
-            var sb = new StringBuilder();
-            if (timeSpan.Seconds != 0)
-            {
-                sb.Append($"{timeSpan.Seconds} с ");
-            }
-            if (timeSpan.Milliseconds != 0)
-            {
-                
-                sb.Append($"{timeSpan.Milliseconds} мс");
-            }
-
-            return sb.ToString();
-        }
+                [TestCase(ParserType.Regular)]
+                [TestCase(ParserType.Incremental)]
+                public void TestRelexChangeLastEnd(ParserType type)
+                {
+                    PrintLexerSpeed(type, parser =>
+                    {
+                        var chars = parser.Lexer.Buffer.GetText().ToCharArray();
+                        var buffer = new TokenBuffer(parser.Lexer);
+                        var start = 0;
+                        var end = 0;
+                        for (var i = buffer.CachedTokens.Count - 1; i >= 0; i--)
+                        {
+                            if (buffer[i].Type != SpringTokenType.End) continue;
+                            var j = start = buffer[i].Start;
+                            end = buffer[i].End;
+                            for (; j < end; j++)
+                            {
+                                chars[j] = 'X';
+                            }
+        
+                            break;
+                        }
+        
+                        var range = new TextRange(start, end);
+                        parser.builder.ReScan(range,
+                            type == ParserType.Incremental ? new IncrementalLexerFactory() : new LexerFactory(),
+                            new BufferRange(parser.Lexer.Buffer, new TextRange(0, parser.Lexer.Buffer.Length)));
+                    });
+                }
     }
 }

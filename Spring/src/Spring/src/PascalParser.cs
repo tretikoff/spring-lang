@@ -16,34 +16,34 @@ namespace JetBrains.ReSharper.Plugins.Spring
 
     public class SpringParser : IIncrementalParser
     {
-        private ILexer _myLexer;
+        public ILexer Lexer;
         private TokenBuffer _buffer;
+        private LifetimeDefinition def;
+        public TreeBuilder builder;
 
         public SpringParser(ILexer lexer)
         {
-            _myLexer = lexer;
+            def = Lifetime.Define();
+            Lexer = lexer;
+            builder = new TreeBuilder(Lexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime, _buffer);
         }
 
         public IFile ReParse(ILexer lexer)
         {
-            _myLexer = lexer;
+            Lexer = lexer;
             return ParseFile();
         }
 
         public ILexer GetLexer()
         {
-            return _myLexer;
+            return Lexer;
         }
 
         public IFile ParseFile()
         {
-            var def = Lifetime.Define();
-            var builder = new TreeBuilder(_myLexer, SpringFileNodeType.Instance, new TokenFactory(), def.Lifetime,
-                _buffer);
             var fileMark = builder.Mark();
             while (!builder.Eof())
             {
-                var tt = builder.GetTokenType();
                 ParseCompoundStatement(builder);
             }
 
