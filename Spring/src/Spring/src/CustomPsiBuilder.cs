@@ -10,6 +10,7 @@ using JetBrains.ReSharper.Psi.ExtensionsAPI.Tree;
 using JetBrains.ReSharper.Psi.Parsing;
 using JetBrains.ReSharper.Psi.TreeBuilder;
 using JetBrains.Text;
+using JetBrains.Util;
 using JetBrains.Util.Logging;
 
 namespace JetBrains.ReSharper.Plugins.Spring
@@ -21,7 +22,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
         public readonly List<Marker> MyProduction;
         private readonly CompositeNodeType _myRootType;
         private readonly IPsiBuilderTokenFactory _myTokenFactory;
-        private readonly TokenBuffer MyTokenBuffer;
+        public readonly TokenBuffer MyTokenBuffer;
         private readonly IArrayOfTokens MyArrayOfTokens;
         private int _myCurrentLexeme;
         private TokenNodeType _myCurrentTokenType;
@@ -32,8 +33,9 @@ namespace JetBrains.ReSharper.Plugins.Spring
             ILexer lexer,
             CompositeNodeType rootType,
             IPsiBuilderTokenFactory tokenFactory,
-            Lifetime lifetime)
-            : this(lexer, rootType, 0, -1, tokenFactory, lifetime)
+            Lifetime lifetime,
+            TokenBuffer buffer = null)
+            : this(lexer, rootType, 0, -1, tokenFactory, lifetime, buffer)
         {
         }
 
@@ -43,29 +45,14 @@ namespace JetBrains.ReSharper.Plugins.Spring
             int start,
             int stop,
             IPsiBuilderTokenFactory tokenFactory,
-            Lifetime lifetime)
+            Lifetime lifetime,
+            TokenBuffer buffer)
         {
             _myLexer = lexer;
             _myRootType = rootType;
             _myTokenFactory = tokenFactory;
             _myCurrentLexeme = _myNonCommentLexeme = start;
-            switch (lexer)
-            {
-                case CachingLexer cachingLexer:
-                    MyTokenBuffer = cachingLexer.TokenBuffer;
-                    break;
-                case ILazyCachingLexer lazyCachingLexer:
-                    MyTokenBuffer = lazyCachingLexer.TokenBuffer;
-                    if (stop == -1)
-                    {
-                        _myIsLazyCachingLexer = true;
-                    }
-
-                    break;
-                default:
-                    MyTokenBuffer = new TokenBuffer(lexer);
-                    break;
-            }
+            MyTokenBuffer = buffer ?? new TokenBuffer(lexer);
 
             MyArrayOfTokens = MyTokenBuffer.CachedTokens;
             if (MyArrayOfTokens.Count != 0)
@@ -179,6 +166,14 @@ namespace JetBrains.ReSharper.Plugins.Spring
             foreach (var token in tokens)
                 curNode.AddChild(CreateToken(token.Type, _myLexer.Buffer, token.Start, token.End));
             curToken = Math.Min(lastIdx, _myLexemeCount);
+        }
+
+        public void ReScan(
+            TextRange oldRange,
+            ILexerFactory lexerFactory,
+            BufferRange newBufferRange)
+        {
+            MyTokenBuffer.ReScan(oldRange, lexerFactory, newBufferRange);
         }
 
         private LeafElementBase CreateToken(
@@ -320,6 +315,7 @@ namespace JetBrains.ReSharper.Plugins.Spring
             CheckInvariant();
             return currentTokenType;
         }
+
         public TokenNodeType GetTokenType() => _myCurrentTokenType;
 
 
@@ -330,7 +326,8 @@ namespace JetBrains.ReSharper.Plugins.Spring
         {
             if (!@do)
                 return;
-            Assertion.Assert(_myNonCommentLexeme <= _myCurrentLexeme, "non comment lexeme must be before current lexeme");
+            Assertion.Assert(_myNonCommentLexeme <= _myCurrentLexeme,
+                "non comment lexeme must be before current lexeme");
             var num = 0;
             if (MyProduction.Count != 0)
                 num = MyProduction[MyProduction.Count - 1].LexemeIndex;
@@ -343,6 +340,5 @@ namespace JetBrains.ReSharper.Plugins.Spring
         private void DoValidityChecks(int first, int last)
         {
         }
-        
     }
 }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using FluentAssertions;
 using JetBrains.Text;
-using JetBrains.Util;
 using NUnit.Framework;
 
 namespace JetBrains.ReSharper.Plugins.Spring.test
@@ -58,6 +57,8 @@ namespace JetBrains.ReSharper.Plugins.Spring.test
                 lexer.TokenStart.Should().Be(lastTokenEnd, $"mismatched on {lexer.CurrentPosition} position");
                 lastTokenEnd = lexer.TokenEnd;
             }
+
+            lastTokenEnd.Should().Be(content.Length);
         }
     }
 }
